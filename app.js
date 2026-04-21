@@ -13,7 +13,7 @@ const STATE = {
     " Confronta", // Column J (Document id)
     "Remisión", 
     "Item", 
-    "Nombre Material SAP"
+    "Confronta / Acta de Hechos"
   ]
 };
 
@@ -101,14 +101,40 @@ function initTheme() {
   });
 }
 
+
+// Inicialización de la Sidebar Colapsable
+function initSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const btnToggle = document.getElementById('btn-toggle-sidebar');
+  
+  if (!sidebar || !btnToggle) return;
+
+  function setSidebarState(isCollapsed) {
+    if (isCollapsed) {
+      document.body.classList.add('sidebar-collapsed');
+    } else {
+      document.body.classList.remove('sidebar-collapsed');
+    }
+    localStorage.setItem('confrontas_sidebar_collapsed', isCollapsed);
+  }
+
+  // Cargar estado inicial
+  const savedState = localStorage.getItem('confrontas_sidebar_collapsed') === 'true';
+  setSidebarState(savedState);
+
+  btnToggle.addEventListener('click', () => {
+    const isCurrentlyCollapsed = document.body.classList.contains('sidebar-collapsed');
+    setSidebarState(!isCurrentlyCollapsed);
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   lucide.createIcons();
   const form = document.getElementById("data-form");
   const consecutivoInput = document.getElementById("consecutivo");
 
   initTheme();
-
-  // Arrancar estado
+  initSidebar();
   initPersistedState();
   
   // Respetar valor si el usuario estaba escribiendo uno manualmente antes de refrescar
@@ -170,7 +196,8 @@ document.addEventListener("DOMContentLoaded", () => {
         confronta_2: fd.get("confronta_2").trim(),
         remision: fd.get("remision").trim().toUpperCase(),
         item: fd.get("item").trim(),
-        material: fd.get("material").trim().toUpperCase()
+        material: fd.get("material").trim().toUpperCase(),
+        confrontada: false
       };
 
       STATE.records.push(record);
@@ -259,7 +286,8 @@ document.addEventListener("DOMContentLoaded", () => {
              confronta_2: String(row[9] || "").trim(),
              remision: String(row[10] || "").trim().toUpperCase(),
              item: String(row[11] || "").trim(),
-             material: String(row[12] || "").trim().toUpperCase()
+             material: String(row[12] || "").trim().toUpperCase(),
+             confrontada: (String(row[12] || "").trim().toUpperCase() === "HECHO" || String(row[12] || "").trim().toUpperCase() === "SÍ")
            };
 
            pendingImportRecords.push(record);
@@ -468,7 +496,8 @@ document.addEventListener("DOMContentLoaded", () => {
         confronta_2: commonConfronta2,
         remision: commonRemision,
         item: commonItem,
-        material: commonMaterial
+        material: commonMaterial,
+        confrontada: false
       });
     });
 
@@ -564,8 +593,9 @@ function renderTable() {
   }
 
   recordsToShow.forEach((r) => {
+    const isConfrontada = !!r.confrontada;
     const tr = document.createElement("tr");
-    tr.className = "hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors border-b border-slate-100 dark:border-slate-700/50 last:border-0";
+    tr.className = `transition-colors border-b border-slate-100 dark:border-slate-700/50 last:border-0 ${isConfrontada ? 'row-confrontada' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`;
     
     // Configuración de celdas: [field, label, type, isEditable, extraClasses]
     const cellConfig = [
@@ -574,14 +604,13 @@ function renderTable() {
         ["destino", r.destino, "text", true, ""],
         ["marcas", r.marcas, "text", true, "font-bold opacity-90"],
         ["numero", r.numero, "number", true, "font-bold opacity-90"],
-        ["faltante", Number(r.faltante).toFixed(2), "number", true, "text-red-600 dark:text-red-400 font-bold"],
+        ["faltante", Number(r.faltante).toFixed(2), "number", true, `text-red-600 dark:text-red-400 font-bold ${isConfrontada ? 'faltante-cell' : ''}`],
         ["fecha_siniestro", r.fecha_siniestro, "date", true, ""],
         ["confronta_1", r.confronta_1, "date", true, ""],
         ["fecha_de", r.fecha_de, "text", true, ""],
         ["confronta_2", r.confronta_2, "text", true, ""],
         ["remision", r.remision, "text", true, "font-semibold bg-blue-50/50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 rounded"],
         ["item", r.item, "text", true, ""],
-        ["material", r.material, "text", true, ""],
     ];
 
     cellConfig.forEach(([field, value, type, editable, classes]) => {
@@ -601,6 +630,26 @@ function renderTable() {
         }
         tr.appendChild(td);
     });
+
+    // Columna M - Confronta / Acta de Hechos (Toggle Switch)
+    const tdConfronta = document.createElement("td");
+    tdConfronta.className = "px-4 py-3 whitespace-nowrap text-sm";
+    tdConfronta.innerHTML = `
+        <div class="flex items-center">
+            <label class="confronta-switch" title="Marcar como confrontada">
+                <input type="checkbox" ${isConfrontada ? 'checked' : ''} data-id="${r.id_unico}">
+                <span class="confronta-slider"></span>
+            </label>
+            <span class="confronta-label ${isConfrontada ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}">
+                ${isConfrontada ? 'HECHO' : ''}
+            </span>
+        </div>
+    `;
+    const checkbox = tdConfronta.querySelector('input[type="checkbox"]');
+    checkbox.addEventListener('change', (e) => {
+        toggleConfronta(r.id_unico, e.target.checked);
+    });
+    tr.appendChild(tdConfronta);
 
     // Acción - Eliminar
     const tdAction = document.createElement("td");
@@ -698,35 +747,62 @@ function startEditing(td, idUnico, field, originalValue, type) {
     input.addEventListener("blur", save);
 }
 
+/**
+ * Toggle the confrontada state for a record
+ */
+window.toggleConfronta = function(idUnico, isChecked) {
+  const idx = STATE.records.findIndex(r => r.id_unico === idUnico);
+  if (idx !== -1) {
+    STATE.records[idx].confrontada = isChecked;
+    persistState();
+    renderTable();
+    renderSummary();
+  }
+};
+
 function renderSummary() {
   const tbody = document.getElementById("summary-body");
   tbody.innerHTML = "";
   
   const recordsToSummarize = getFilteredRecords();
-  const summary = {};
+  // Separate totals: total vs pendiente (not confrontada)
+  const summaryTotal = {};
+  const summaryPendiente = {};
 
   recordsToSummarize.forEach(r => {
     const rem = r.remision || "SIN REMISIÓN";
-    if (!summary[rem]) summary[rem] = 0;
+    if (!summaryTotal[rem]) summaryTotal[rem] = 0;
+    if (!summaryPendiente[rem]) summaryPendiente[rem] = 0;
     
     const val = Number(r.faltante);
     if (!isNaN(val)) {
-      summary[rem] += val;
+      summaryTotal[rem] += val;
+      // Solo sumar al pendiente si NO está confrontada
+      if (!r.confrontada) {
+        summaryPendiente[rem] += val;
+      }
     }
   });
 
-  const keys = Object.keys(summary);
+  const keys = Object.keys(summaryTotal);
   if (keys.length === 0) {
     tbody.innerHTML = `<tr><td colspan="2" class="px-4 py-3 text-center text-xs text-slate-400 dark:text-slate-500">Sin datos</td></tr>`;
     return;
   }
 
   keys.forEach(k => {
+    const total = summaryTotal[k];
+    const pendiente = summaryPendiente[k];
+    const hasConfrontadas = total !== pendiente;
+    
     const tr = document.createElement("tr");
     tr.className = "border-b border-slate-100 dark:border-slate-700/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/50";
     tr.innerHTML = `
       <td class="px-4 py-3 text-sm font-medium opacity-90">${k}</td>
-      <td class="px-4 py-3 text-sm text-red-600 dark:text-red-400 font-bold text-right">${summary[k].toFixed(2)}</td>
+      <td class="px-4 py-3 text-right">
+        <span class="text-sm text-red-600 dark:text-red-400 font-bold">${pendiente.toFixed(2)}</span>
+        ${hasConfrontadas ? `<span class="block text-[0.65rem] text-slate-400 dark:text-slate-500 mt-0.5 line-through">${total.toFixed(2)} total</span>` : ''}
+      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -777,91 +853,235 @@ function showToast(msg, type = "success") {
   }, 4000); 
 }
 
-function exportExcel() {
+async function exportExcel() {
   try {
-    // Es mejor exportar SIEMPRE todos los records de la sesión, no solo los filtrados visualmente.
     if (STATE.records.length === 0) {
       showToast("No hay datos cargados para exportar.", "warning");
       return;
     }
 
-    const aoa = [STATE.headers];
-
-    STATE.records.forEach(r => {
-      const row = [
-        Number(r.consecutivo) || null, 
-        r.estado,                      
-        r.destino,                     
-        r.marcas,                      
-        Number(r.numero) || null,      
-        Number(r.faltante) || 0,       
-        dateToExcelCell(r.fecha_siniestro), 
-        dateToExcelCell(r.confronta_1),     
-        r.fecha_de,                    
-        r.confronta_2,                 
-        r.remision,                    
-        r.item,                        
-        r.material                     
-      ];
-      aoa.push(row);
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Confrontas 2026';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Concentrado', {
+      views: [{ state: 'frozen', ySplit: 1 }]
     });
 
-    aoa[0][14] = "Remisión";      
-    aoa[0][15] = "Total Faltante";
-    
-    // El resumen en excel se basa en la hoja entera sin filtro
+    // ── Column definitions with auto-width hints ──
+    const colDefs = [
+      { header: STATE.headers[0],  key: 'consecutivo',     width: 14 },
+      { header: STATE.headers[1],  key: 'estado',          width: 16 },
+      { header: STATE.headers[2],  key: 'destino',         width: 12 },
+      { header: STATE.headers[3],  key: 'marcas',          width: 12 },
+      { header: STATE.headers[4],  key: 'numero',          width: 12 },
+      { header: STATE.headers[5],  key: 'faltante',        width: 16 },
+      { header: STATE.headers[6],  key: 'fecha_siniestro', width: 16 },
+      { header: STATE.headers[7],  key: 'confronta_1',     width: 16 },
+      { header: STATE.headers[8],  key: 'fecha_de',        width: 14 },
+      { header: STATE.headers[9],  key: 'confronta_2',     width: 16 },
+      { header: STATE.headers[10], key: 'remision',        width: 16 },
+      { header: STATE.headers[11], key: 'item',            width: 12 },
+      { header: STATE.headers[12], key: 'confronta_acta',  width: 26 },
+      { header: '',                key: 'spacer',          width: 4  },
+      { header: 'Remisión',        key: 'sum_remision',    width: 20 },
+      { header: 'Total Faltante',  key: 'sum_faltante',    width: 18 },
+    ];
+    ws.columns = colDefs;
+
+    // ── Styles ──
+    const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    const headerFont = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10, name: 'Calibri' };
+    const headerBorder = {
+      top:    { style: 'thin', color: { argb: 'FF334155' } },
+      bottom: { style: 'medium', color: { argb: 'FF1E3A5F' } },
+      left:   { style: 'thin', color: { argb: 'FF334155' } },
+      right:  { style: 'thin', color: { argb: 'FF334155' } },
+    };
+    const cellBorder = {
+      top:    { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      left:   { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      right:  { style: 'thin', color: { argb: 'FFE2E8F0' } },
+    };
+    const faltanteHeaderFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } };
+    const hechoFill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+    const hechoFont   = { bold: true, color: { argb: 'FF166534' }, size: 10, name: 'Calibri' };
+    const pendienteFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF7ED' } };
+    const pendienteFont = { color: { argb: 'FF9A3412' }, size: 10, name: 'Calibri' };
+    const faltanteCellFont = { bold: true, color: { argb: 'FFDC2626' }, size: 10, name: 'Calibri' };
+    const summaryHeaderFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF059669' } };
+    const summaryHeaderFont = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10, name: 'Calibri' };
+    const dataFont = { size: 10, name: 'Calibri', color: { argb: 'FF1E293B' } };
+    const dateFormat = 'DD/MM/YYYY';
+
+    // ── Style header row ──
+    const headerRow = ws.getRow(1);
+    headerRow.height = 28;
+    headerRow.eachCell((cell, colNumber) => {
+      if (colNumber <= 13) {
+        cell.fill = colNumber === 6 ? faltanteHeaderFill : headerFill;
+        cell.font = headerFont;
+        cell.border = headerBorder;
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      } else if (colNumber >= 15) {
+        cell.fill = summaryHeaderFill;
+        cell.font = summaryHeaderFont;
+        cell.border = headerBorder;
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      }
+    });
+
+    // ── Add data rows ──
+    STATE.records.forEach((r, idx) => {
+      const fechaSiniestro = r.fecha_siniestro ? new Date(r.fecha_siniestro + 'T00:00:00') : '';
+      const confronta1 = r.confronta_1 ? new Date(r.confronta_1 + 'T00:00:00') : '';
+      const isHecho = !!r.confrontada;
+
+      const dataRow = ws.addRow({
+        consecutivo:    Number(r.consecutivo) || null,
+        estado:         r.estado,
+        destino:        r.destino,
+        marcas:         r.marcas,
+        numero:         Number(r.numero) || null,
+        faltante:       Number(r.faltante) || 0,
+        fecha_siniestro: fechaSiniestro,
+        confronta_1:    confronta1,
+        fecha_de:       r.fecha_de,
+        confronta_2:    r.confronta_2,
+        remision:       r.remision,
+        item:           r.item,
+        confronta_acta: isHecho ? 'HECHO' : '',
+      });
+
+      dataRow.height = 22;
+
+      // Style each data cell
+      dataRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        if (colNumber > 13) return;
+
+        cell.font = dataFont;
+        cell.border = cellBorder;
+        cell.alignment = { vertical: 'middle' };
+
+        // Alternate row shading
+        if (idx % 2 === 1) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        }
+
+        // Faltante column (6) — red bold
+        if (colNumber === 6) {
+          cell.font = faltanteCellFont;
+          cell.numFmt = '#,##0.00';
+          cell.alignment = { vertical: 'middle', horizontal: 'right' };
+          if (isHecho) {
+            // Struck-through faltante for confronted rows
+            cell.font = { ...faltanteCellFont, strike: true, color: { argb: 'FF94A3B8' } };
+          }
+        }
+
+        // Date columns (7, 8)
+        if (colNumber === 7 || colNumber === 8) {
+          if (cell.value instanceof Date) {
+            cell.numFmt = dateFormat;
+          }
+        }
+
+        // Confronta / Acta column (13)
+        if (colNumber === 13) {
+          if (isHecho) {
+            cell.fill = hechoFill;
+            cell.font = hechoFont;
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          } else {
+            cell.fill = pendienteFill;
+            cell.font = pendienteFont;
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          }
+        }
+
+        // Remisión column (11) — subtle blue
+        if (colNumber === 11) {
+          cell.font = { ...dataFont, bold: true, color: { argb: 'FF1E40AF' } };
+        }
+
+        // Consecutivo column (1)
+        if (colNumber === 1) {
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.font = { ...dataFont, bold: true, color: { argb: 'FF3B82F6' } };
+        }
+
+        // Marcas & Numero (4, 5) — bold
+        if (colNumber === 4 || colNumber === 5) {
+          cell.font = { ...dataFont, bold: true };
+        }
+      });
+
+      // If entire row is confrontada, give it full green tint
+      if (isHecho) {
+        for (let c = 1; c <= 13; c++) {
+          const cell = dataRow.getCell(c);
+          if (c !== 6 && c !== 13) { // Keep faltante and acta with their own styles
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
+          }
+        }
+      }
+    });
+
+    // ── SUMIF Summary (columns O-P) ──
     const summary = {};
     STATE.records.forEach(r => {
-      const rem = r.remision || "SIN REMISIÓN";
+      const rem = r.remision || 'SIN REMISIÓN';
       if (!summary[rem]) summary[rem] = 0;
-      summary[rem] += (Number(r.faltante) || 0);
+      if (!r.confrontada) {
+        summary[rem] += (Number(r.faltante) || 0);
+      }
     });
 
     const uniqueRemisiones = Object.keys(summary);
     uniqueRemisiones.forEach((rem, idx) => {
-      const rIndex = idx + 1;
+      const rowNum = idx + 2; // Row 2 onwards (after header)
+      const row = ws.getRow(rowNum);
       
-      if (!aoa[rIndex]) {
-        aoa[rIndex] = [];
-      }
-      
-      for (let i = aoa[rIndex].length; i < 14; i++) {
-        aoa[rIndex][i] = null;
-      }
-      
-      aoa[rIndex][14] = rem;           
-      aoa[rIndex][15] = summary[rem];  
+      const cellO = row.getCell(15);
+      cellO.value = rem;
+      cellO.font = { bold: true, size: 10, name: 'Calibri', color: { argb: 'FF1E293B' } };
+      cellO.border = cellBorder;
+      cellO.alignment = { vertical: 'middle' };
+
+      const cellP = row.getCell(16);
+      cellP.value = summary[rem];
+      cellP.numFmt = '#,##0.00';
+      cellP.font = { bold: true, size: 11, name: 'Calibri', color: { argb: 'FFDC2626' } };
+      cellP.border = cellBorder;
+      cellP.alignment = { vertical: 'middle', horizontal: 'right' };
+      cellP.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF1F2' } };
     });
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    
-    ws['!cols'] = [
-      {wch: 12}, // A
-      {wch: 15}, // B
-      {wch: 10}, // C
-      {wch: 10}, // D
-      {wch: 10}, // E
-      {wch: 15}, // F
-      {wch: 15}, // G
-      {wch: 15}, // H
-      {wch: 15}, // I
-      {wch: 15}, // J
-      {wch: 15}, // K
-      {wch: 10}, // L
-      {wch: 25}, // M
-      {wch: 5},  // N 
-      {wch: 20}, // O
-      {wch: 18}, // P
-    ];
+    // ── Auto-fit column widths based on content ──
+    ws.columns.forEach((col) => {
+      let maxLen = col.header ? col.header.length : 0;
+      col.eachCell({ includeEmpty: false }, (cell) => {
+        const cellLen = cell.value ? String(cell.value).length : 0;
+        if (cellLen > maxLen) maxLen = cellLen;
+      });
+      // Clamp between original width and calculated, with padding
+      col.width = Math.max(col.width || 10, Math.min(maxLen + 4, 40));
+    });
 
-    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-    XLSX.writeFile(wb, "Concentrado_Confrontas_Web_Export.xlsx");
-    
-    showToast("Archivo Excel .xlsx generado exitosamente.", "success");
+    // ── Generate and download ──
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'Concentrado_Confrontas_Web_Export.xlsx';
+    a.click();
+    URL.revokeObjectURL(url);
+
+    showToast("Archivo Excel con estilos generado exitosamente.", "success");
 
   } catch (error) {
     console.error("Error crítico durante la exportación a Excel", error);
-    showToast("Error crítico en la exportación.", "error");
+    showToast("Error crítico en la exportación: " + error.message, "error");
   }
 }

@@ -14,8 +14,10 @@
         }
       }
     </script>
-    <!-- SheetJS for Export -->
+    <!-- SheetJS for Import -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- ExcelJS for Styled Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
     <!-- Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Google Fonts -->
@@ -159,6 +161,104 @@
             color: #f1f5f9;
             box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
         }
+
+        /* Sidebar Collapsible Logic */
+        :root {
+            --sidebar-width: 420px;
+        }
+
+        #sidebar {
+            width: var(--sidebar-width);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .sidebar-collapsed #sidebar {
+            width: 0 !important;
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden;
+            border-right-width: 0;
+        }
+
+
+        /* Adjustments for collapsed state */
+        .workspace-container {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Confronta Toggle Switch */
+        .confronta-switch {
+            position: relative;
+            width: 40px;
+            height: 22px;
+            display: inline-block;
+            cursor: pointer;
+        }
+        .confronta-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .confronta-slider {
+            position: absolute;
+            inset: 0;
+            background-color: #cbd5e1;
+            border-radius: 22px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .dark .confronta-slider {
+            background-color: #475569;
+        }
+        .confronta-slider::before {
+            content: '';
+            position: absolute;
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .confronta-switch input:checked + .confronta-slider {
+            background-color: #22c55e;
+            box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+        }
+        .dark .confronta-switch input:checked + .confronta-slider {
+            background-color: #16a34a;
+            box-shadow: 0 0 10px rgba(22, 163, 74, 0.5);
+        }
+        .confronta-switch input:checked + .confronta-slider::before {
+            transform: translateX(18px);
+        }
+
+        /* Row confrontada highlight */
+        .row-confrontada {
+            background-color: rgba(34, 197, 94, 0.06) !important;
+        }
+        .dark .row-confrontada {
+            background-color: rgba(22, 163, 74, 0.08) !important;
+        }
+        .row-confrontada:hover {
+            background-color: rgba(34, 197, 94, 0.12) !important;
+        }
+        .dark .row-confrontada:hover {
+            background-color: rgba(22, 163, 74, 0.15) !important;
+        }
+        .row-confrontada .faltante-cell {
+            text-decoration: line-through;
+            opacity: 0.5;
+        }
+        .confronta-label {
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-left: 6px;
+            transition: all 0.2s ease;
+        }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden text-slate-800 dark:text-slate-100 transition-colors duration-200">
@@ -166,6 +266,10 @@
     <!-- Header -->
     <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between shrink-0 glass-panel relative z-10 transition-colors duration-200">
         <div class="flex items-center gap-3">
+            <!-- Hamburger Menu Button -->
+            <button id="btn-toggle-sidebar" class="p-2 mr-1 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-none" title="Alternar formulario">
+                <i data-lucide="menu" class="w-6 h-6"></i>
+            </button>
             <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/30">
                 <i data-lucide="file-spreadsheet" class="w-5 h-5"></i>
             </div>
@@ -207,10 +311,10 @@
     </header>
 
     <!-- Main Content -->
-    <main class="flex-1 flex overflow-hidden">
+    <main class="flex-1 flex overflow-hidden relative">
         
         <!-- Sidebar Form -->
-        <aside class="w-full md:w-[420px] bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 overflow-y-auto shrink-0 z-0 transition-colors duration-200">
+        <aside id="sidebar" class="bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 overflow-y-auto shrink-0 z-20 transition-colors duration-200">
             <form id="data-form" class="px-6 py-6 space-y-8">
                 
                 <!-- Section 1 -->
@@ -301,7 +405,7 @@
         </aside>
 
         <!-- Main Workspace -->
-        <section class="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-slate-900 relative overflow-hidden transition-colors duration-200">
+        <section class="workspace-container flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-slate-900 relative overflow-hidden transition-colors duration-200">
             
             <div class="flex-1 overflow-auto p-6">
                 <!-- Data Table -->
@@ -336,12 +440,12 @@
                                     <th class="px-4 py-3 font-medium">Conf. Doc</th>
                                     <th class="px-4 py-3 font-medium">Remisión</th>
                                     <th class="px-4 py-3 font-medium">Item</th>
-                                    <th class="px-4 py-3 font-medium">Material SAP</th>
+                                    <th class="px-4 py-3 font-medium text-emerald-600 dark:text-emerald-400">Acta ✓</th>
                                     <th class="px-4 py-3 font-medium text-right"></th>
                                 </tr>
                             </thead>
                             <tbody id="table-body" class="bg-white/40 dark:bg-slate-800/40 divide-y divide-slate-100 dark:divide-slate-700/50 text-slate-700 dark:text-slate-300">
-                                <!-- Dynamic rows -->
+                                <!-- Dynamic rows with confronta toggle -->
                             </tbody>
                         </table>
                     </div>
@@ -353,8 +457,8 @@
                         <h3 class="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2"><i data-lucide="calculator" class="w-4 h-4 text-emerald-500"></i> Fórmulas en Vivo</h3>
                         <div class="group relative cursor-help">
                             <i data-lucide="info" class="w-4 h-4 text-slate-400 dark:text-slate-500"></i>
-                            <div class="hidden group-hover:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 bg-slate-800 dark:bg-white text-white dark:text-slate-800 text-xs rounded-md py-1.5 px-2 text-center pointer-events-none">
-                                Equivale a SUMIF($K, O, $F) del Excel original
+                            <div class="hidden group-hover:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-slate-800 dark:bg-white text-white dark:text-slate-800 text-xs rounded-md py-1.5 px-2 text-center pointer-events-none">
+                                SUMIF($K, O, $F) — excluye filas marcadas como "Confrontada"
                             </div>
                         </div>
                     </div>
