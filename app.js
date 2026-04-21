@@ -68,16 +68,22 @@ function dateToExcelCell(dateStr) {
 function initTheme() {
   const themeIconLight = document.getElementById('theme-icon-light');
   const themeIconDark = document.getElementById('theme-icon-dark');
+  const themeIconLightMobile = document.getElementById('theme-icon-light-mobile');
+  const themeIconDarkMobile = document.getElementById('theme-icon-dark-mobile');
   
   function applyTheme(isDark) {
     if (isDark) {
       document.documentElement.classList.add('dark');
-      themeIconLight.classList.remove('hidden');
-      themeIconDark.classList.add('hidden');
+      if (themeIconLight) themeIconLight.classList.remove('hidden');
+      if (themeIconDark) themeIconDark.classList.add('hidden');
+      if (themeIconLightMobile) themeIconLightMobile.classList.remove('hidden');
+      if (themeIconDarkMobile) themeIconDarkMobile.classList.add('hidden');
     } else {
       document.documentElement.classList.remove('dark');
-      themeIconLight.classList.add('hidden');
-      themeIconDark.classList.remove('hidden');
+      if (themeIconLight) themeIconLight.classList.add('hidden');
+      if (themeIconDark) themeIconDark.classList.remove('hidden');
+      if (themeIconLightMobile) themeIconLightMobile.classList.add('hidden');
+      if (themeIconDarkMobile) themeIconDarkMobile.classList.remove('hidden');
     }
   }
 
@@ -93,12 +99,18 @@ function initTheme() {
   
   applyTheme(isDark);
 
-  document.getElementById('theme-toggle').addEventListener('click', () => {
+  const toggleHandler = () => {
     const currentlyDark = document.documentElement.classList.contains('dark');
     const newThemeDark = !currentlyDark;
     localStorage.setItem('theme', newThemeDark ? 'dark' : 'light');
     applyTheme(newThemeDark);
-  });
+  };
+
+  const desktopToggle = document.getElementById('theme-toggle');
+  const mobileToggle = document.getElementById('theme-toggle-mobile');
+  
+  if (desktopToggle) desktopToggle.addEventListener('click', toggleHandler);
+  if (mobileToggle) mobileToggle.addEventListener('click', toggleHandler);
 }
 
 
