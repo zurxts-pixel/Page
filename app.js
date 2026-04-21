@@ -335,6 +335,208 @@ document.addEventListener("DOMContentLoaded", () => {
     modal.classList.add("hidden");
     showToast("Hoja de trabajo limpiada exitosamente.", "success");
   });
+
+  // =============================================
+  // Captura Rápida (Bulk Paste) Funcionalidad
+  // =============================================
+  const bulkModal = document.getElementById("bulk-modal");
+  const bulkTextarea = document.getElementById("bulk-textarea");
+  const bulkStepInput = document.getElementById("bulk-step-input");
+  const bulkStepPreview = document.getElementById("bulk-step-preview");
+  const bulkPreviewBody = document.getElementById("bulk-preview-body");
+  const bulkPreviewCount = document.getElementById("bulk-preview-count");
+  const bulkWarnings = document.getElementById("bulk-warnings");
+  const btnBulkNext = document.getElementById("btn-bulk-next");
+  const btnBulkConfirm = document.getElementById("btn-bulk-confirm");
+  const btnBulkBack = document.getElementById("btn-bulk-back");
+  const btnBulkCancel = document.getElementById("btn-bulk-cancel");
+
+  let pendingBulkRecords = [];
+
+  function resetBulkModal() {
+    bulkTextarea.value = "";
+    pendingBulkRecords = [];
+    bulkPreviewBody.innerHTML = "";
+    bulkWarnings.classList.add("hidden");
+    bulkWarnings.innerHTML = "";
+    // Show step 1, hide step 2
+    bulkStepInput.classList.remove("hidden");
+    bulkStepInput.classList.add("flex");
+    bulkStepPreview.classList.add("hidden");
+    bulkStepPreview.classList.remove("flex");
+    // Show Next, hide Confirm & Back
+    btnBulkNext.classList.remove("hidden");
+    btnBulkConfirm.classList.add("hidden");
+    btnBulkBack.classList.add("hidden");
+  }
+
+  // Open modal
+  document.getElementById("btn-bulk-paste").addEventListener("click", () => {
+    resetBulkModal();
+    bulkModal.classList.remove("hidden");
+    lucide.createIcons();
+    // Focus the textarea after a brief delay for the animation
+    setTimeout(() => bulkTextarea.focus(), 100);
+  });
+
+  // Cancel
+  btnBulkCancel.addEventListener("click", () => {
+    bulkModal.classList.add("hidden");
+    resetBulkModal();
+  });
+
+  // Back to input step
+  btnBulkBack.addEventListener("click", () => {
+    bulkStepInput.classList.remove("hidden");
+    bulkStepInput.classList.add("flex");
+    bulkStepPreview.classList.add("hidden");
+    bulkStepPreview.classList.remove("flex");
+    btnBulkNext.classList.remove("hidden");
+    btnBulkConfirm.classList.add("hidden");
+    btnBulkBack.classList.add("hidden");
+  });
+
+  // Pre-visualizar
+  btnBulkNext.addEventListener("click", () => {
+    const raw = bulkTextarea.value.trim();
+
+    if (!raw) {
+      showToast("El área de texto está vacía. Pega tu lista primero.", "warning");
+      return;
+    }
+
+    const lines = raw.split(/\r?\n/).filter(l => l.trim() !== "");
+
+    if (lines.length === 0) {
+      showToast("No se detectaron líneas válidas.", "warning");
+      return;
+    }
+
+    // Read common fields from the main form
+    const mainForm = document.getElementById("data-form");
+    const fd = new FormData(mainForm);
+    const commonEstado = (fd.get("estado") || "").trim().toUpperCase();
+    const commonDestino = (fd.get("destino") || "").trim().toUpperCase();
+    const commonRemision = (fd.get("remision") || "").trim().toUpperCase();
+    const commonItem = (fd.get("item") || "").trim();
+    const commonMaterial = (fd.get("material") || "").trim().toUpperCase();
+    const commonFaltante = Number(fd.get("faltante")) || 0;
+    const commonFechaSiniestro = fd.get("fecha_siniestro") || "";
+    const commonConfronta1 = fd.get("confronta_1") || "";
+    const commonFechaDe = (fd.get("fecha_de") || "").trim();
+    const commonConfronta2 = (fd.get("confronta_2") || "").trim();
+
+    // Calculate starting consecutivo
+    let nextConsec = getNextConsecutivo();
+    pendingBulkRecords = [];
+    const skippedLines = [];
+
+    lines.forEach((line, idx) => {
+      // Split by tab or whitespace. The LAST token is the number, everything before is the marca.
+      const parts = line.trim().split(/[\t\s]+/);
+
+      if (parts.length < 2) {
+        skippedLines.push({ lineNum: idx + 1, text: line.trim(), reason: "No se pudo separar marca y número" });
+        return;
+      }
+
+      const numeroPart = parts[parts.length - 1];
+      const marcaPart = parts.slice(0, -1).join(" ").toUpperCase();
+      const numVal = Number(numeroPart);
+
+      if (!marcaPart) {
+        skippedLines.push({ lineNum: idx + 1, text: line.trim(), reason: "Marca vacía" });
+        return;
+      }
+
+      if (isNaN(numVal)) {
+        skippedLines.push({ lineNum: idx + 1, text: line.trim(), reason: `"${numeroPart}" no es un número válido` });
+        return;
+      }
+
+      pendingBulkRecords.push({
+        id_unico: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+        consecutivo: nextConsec++,
+        estado: commonEstado,
+        destino: commonDestino,
+        marcas: marcaPart,
+        numero: numVal,
+        faltante: commonFaltante,
+        fecha_siniestro: commonFechaSiniestro,
+        confronta_1: commonConfronta1,
+        fecha_de: commonFechaDe,
+        confronta_2: commonConfronta2,
+        remision: commonRemision,
+        item: commonItem,
+        material: commonMaterial
+      });
+    });
+
+    if (pendingBulkRecords.length === 0) {
+      showToast("No se pudieron generar registros válidos. Verifica el formato.", "error");
+      return;
+    }
+
+    // Render preview table
+    bulkPreviewBody.innerHTML = "";
+    pendingBulkRecords.forEach((r, i) => {
+      const tr = document.createElement("tr");
+      tr.className = "hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors";
+      tr.innerHTML = `
+        <td class="px-3 py-2 text-slate-400 dark:text-slate-500 font-medium">${i + 1}</td>
+        <td class="px-3 py-2 font-semibold">${r.marcas}</td>
+        <td class="px-3 py-2">${r.numero}</td>
+        <td class="px-3 py-2 text-blue-600 dark:text-blue-400 font-semibold">${r.consecutivo}</td>
+      `;
+      bulkPreviewBody.appendChild(tr);
+    });
+
+    bulkPreviewCount.textContent = `Se van a agregar ${pendingBulkRecords.length} registro${pendingBulkRecords.length > 1 ? 's' : ''}`;
+
+    // Show warnings for skipped lines
+    if (skippedLines.length > 0) {
+      bulkWarnings.classList.remove("hidden");
+      bulkWarnings.innerHTML = `
+        <div class="bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 rounded-lg px-4 py-3 border border-amber-200 dark:border-amber-800 text-sm">
+          <p class="font-semibold flex items-center gap-1.5 mb-1"><i data-lucide="alert-triangle" class="w-4 h-4"></i> ${skippedLines.length} línea${skippedLines.length > 1 ? 's' : ''} omitida${skippedLines.length > 1 ? 's' : ''}:</p>
+          <ul class="list-disc list-inside text-xs space-y-0.5 mt-1">
+            ${skippedLines.map(s => `<li>Línea ${s.lineNum}: <code class="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">${s.text}</code> — ${s.reason}</li>`).join('')}
+          </ul>
+        </div>
+      `;
+    } else {
+      bulkWarnings.classList.add("hidden");
+      bulkWarnings.innerHTML = "";
+    }
+
+    // Switch to preview step
+    bulkStepInput.classList.add("hidden");
+    bulkStepInput.classList.remove("flex");
+    bulkStepPreview.classList.remove("hidden");
+    bulkStepPreview.classList.add("flex");
+    btnBulkNext.classList.add("hidden");
+    btnBulkConfirm.classList.remove("hidden");
+    btnBulkBack.classList.remove("hidden");
+    lucide.createIcons();
+  });
+
+  // Confirmar e Insertar
+  btnBulkConfirm.addEventListener("click", () => {
+    if (pendingBulkRecords.length === 0) return;
+
+    STATE.records.push(...pendingBulkRecords);
+    persistState();
+    localStorage.removeItem("confrontas_manual_consecutivo");
+    renderTable();
+    renderSummary();
+    consecutivoInput.value = getNextConsecutivo();
+
+    const count = pendingBulkRecords.length;
+    bulkModal.classList.add("hidden");
+    resetBulkModal();
+
+    showToast(`${count} registro${count > 1 ? 's' : ''} agregado${count > 1 ? 's' : ''} exitosamente vía Captura Rápida.`, "success");
+  });
 });
 
 function getFilteredRecords() {
@@ -354,9 +556,9 @@ function renderTable() {
 
   if (recordsToShow.length === 0) {
     if (STATE.records.length > 0 && currentSearch !== "") {
-      tbody.innerHTML = `<tr><td colspan="13" class="px-6 py-8 text-center text-slate-500">Ningún registro coincide con la búsqueda "${currentSearch}".</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="14" class="px-6 py-8 text-center text-slate-500">Ningún registro coincide con la búsqueda "${currentSearch}".</td></tr>`;
     } else {
-      tbody.innerHTML = `<tr><td colspan="13" class="px-6 py-8 text-center text-slate-400">No hay datos ingresados. Los registros aparecerán aquí.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="14" class="px-6 py-8 text-center text-slate-400">No hay datos ingresados. Los registros aparecerán aquí.</td></tr>`;
     }
     return;
   }
@@ -364,28 +566,136 @@ function renderTable() {
   recordsToShow.forEach((r) => {
     const tr = document.createElement("tr");
     tr.className = "hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors border-b border-slate-100 dark:border-slate-700/50 last:border-0";
-    tr.innerHTML = `
-      <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400 font-medium">${r.consecutivo}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm">${r.estado}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm">${r.destino}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm font-bold opacity-90">${r.marcas} ${r.numero}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm text-red-600 dark:text-red-400 font-bold">${Number(r.faltante).toFixed(2)}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm">${r.fecha_siniestro}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm">${r.confronta_1}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm">${r.fecha_de}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm">${r.confronta_2}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm font-semibold bg-blue-50/50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 rounded">${r.remision}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm">${r.item}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm">${r.material}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm text-right">
-        <!-- Eliminamos por ID interno para no cruzar indices en vista filtrada -->
-        <button onclick="removeRecord('${r.id_unico}')" class="text-rose-500 hover:text-rose-600 dark:text-rose-400 p-1" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-      </td>
+    
+    // Configuración de celdas: [field, label, type, isEditable, extraClasses]
+    const cellConfig = [
+        ["consecutivo", r.consecutivo, "number", false, "text-slate-500 dark:text-slate-400 font-medium"],
+        ["estado", r.estado, "text", true, ""],
+        ["destino", r.destino, "text", true, ""],
+        ["marcas", r.marcas, "text", true, "font-bold opacity-90"],
+        ["numero", r.numero, "number", true, "font-bold opacity-90"],
+        ["faltante", Number(r.faltante).toFixed(2), "number", true, "text-red-600 dark:text-red-400 font-bold"],
+        ["fecha_siniestro", r.fecha_siniestro, "date", true, ""],
+        ["confronta_1", r.confronta_1, "date", true, ""],
+        ["fecha_de", r.fecha_de, "text", true, ""],
+        ["confronta_2", r.confronta_2, "text", true, ""],
+        ["remision", r.remision, "text", true, "font-semibold bg-blue-50/50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 rounded"],
+        ["item", r.item, "text", true, ""],
+        ["material", r.material, "text", true, ""],
+    ];
+
+    cellConfig.forEach(([field, value, type, editable, classes]) => {
+        const td = document.createElement("td");
+        td.className = `px-4 py-3 whitespace-nowrap text-sm ${classes} ${editable ? 'editable-cell' : ''}`;
+        
+        if (editable) {
+            td.innerHTML = `
+                <div class="cell-display">
+                    <span class="value-text">${value}</span>
+                    <i data-lucide="edit-3" class="w-3 h-3 edit-hint"></i>
+                </div>
+            `;
+            td.addEventListener("click", () => startEditing(td, r.id_unico, field, r[field], type));
+        } else {
+            td.textContent = value;
+        }
+        tr.appendChild(td);
+    });
+
+    // Acción - Eliminar
+    const tdAction = document.createElement("td");
+    tdAction.className = "px-4 py-3 whitespace-nowrap text-sm text-right";
+    tdAction.innerHTML = `
+        <button onclick="removeRecord('${r.id_unico}')" class="text-rose-500 hover:text-rose-600 dark:text-rose-400 p-1" title="Eliminar">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
     `;
+    tr.appendChild(tdAction);
+
     tbody.appendChild(tr);
   });
   
   lucide.createIcons();
+}
+
+/**
+ * Inicia la edición de una celda
+ */
+function startEditing(td, idUnico, field, originalValue, type) {
+    if (td.querySelector('input')) return; // Ya se está editando
+
+    const displayDiv = td.querySelector('.cell-display');
+    const valueText = displayDiv.querySelector('.value-text');
+    
+    const input = document.createElement("input");
+    input.type = type === "date" ? "date" : (type === "number" ? "number" : "text");
+    if (type === "number") input.step = "any";
+    
+    input.value = originalValue;
+    input.className = "cell-input";
+    
+    // Ocultar contenido actual
+    displayDiv.classList.add("hidden");
+    td.appendChild(input);
+    input.focus();
+    if (type !== "date") input.select();
+
+    const save = () => {
+        let newValue = input.value;
+        
+        // Formateo según tipo
+        if (type === "number") {
+            newValue = Number(newValue);
+            if (isNaN(newValue)) newValue = originalValue;
+        } else if (type === "text") {
+            // Mantener consistencia de mayúsculas si el valor original lo era (estética del app)
+            if (originalValue === String(originalValue).toUpperCase()) {
+                newValue = newValue.toUpperCase();
+            }
+            newValue = newValue.trim();
+        }
+
+        if (newValue !== originalValue) {
+            const recordIdx = STATE.records.findIndex(rec => rec.id_unico === idUnico);
+            if (recordIdx !== -1) {
+                STATE.records[recordIdx][field] = newValue;
+                persistState();
+                
+                // Si cambiamos algo que afecte el resumen o búsqueda, refrescamos todo
+                // "Faltante" y "Remisión" afectan directamente al Resumen Vivo
+                if (field === "faltante" || field === "remision") {
+                    renderSummary();
+                }
+                
+                // Actualizar el texto en la celda sin re-renderizar toda la fila para no perder el foco visual
+                if (field === "faltante" && typeof newValue === 'number') {
+                    valueText.textContent = newValue.toFixed(2);
+                } else {
+                    valueText.textContent = newValue;
+                }
+                
+                // Si el campo es parte de la búsqueda activa, quizás convenga re-renderizar la tabla
+                if (currentSearch && field !== "faltante") {
+                    renderTable();
+                    return;
+                }
+            }
+        }
+
+        // Restaurar vista
+        input.remove();
+        displayDiv.classList.remove("hidden");
+    };
+
+    input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") save();
+        if (e.key === "Escape") {
+            input.remove();
+            displayDiv.classList.remove("hidden");
+        }
+    });
+
+    input.addEventListener("blur", save);
 }
 
 function renderSummary() {

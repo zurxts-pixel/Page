@@ -111,6 +111,54 @@
         .dark ::-webkit-scrollbar-thumb:hover {
             background: #64748b;
         }
+
+        /* Editable cell styles */
+        .editable-cell {
+            cursor: pointer;
+            position: relative;
+            transition: background-color 0.15s ease;
+        }
+        .editable-cell:hover {
+            background-color: rgba(59, 130, 246, 0.06);
+        }
+        .dark .editable-cell:hover {
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+        .editable-cell .cell-display {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+        .editable-cell .cell-display .edit-hint {
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            color: #94a3b8;
+            flex-shrink: 0;
+        }
+        .editable-cell:hover .cell-display .edit-hint {
+            opacity: 1;
+        }
+        .dark .editable-cell .cell-display .edit-hint {
+            color: #64748b;
+        }
+        .cell-input {
+            width: 100%;
+            background-color: #ffffff;
+            border: 1.5px solid #3b82f6;
+            border-radius: 0.375rem;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+            color: #1e293b;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+            font-family: 'Inter', sans-serif;
+        }
+        .dark .cell-input {
+            background-color: #1e293b;
+            border-color: #60a5fa;
+            color: #f1f5f9;
+            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+        }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden text-slate-800 dark:text-slate-100 transition-colors duration-200">
@@ -130,6 +178,11 @@
             <!-- Limpiar Todo Botón -->
             <button id="btn-clear" class="flex items-center gap-2 bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-400 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-sm focus:ring-4 focus:ring-rose-500/20">
                 <i data-lucide="trash-2" class="w-4 h-4"></i> Limpiar Todo
+            </button>
+
+            <!-- Captura Rápida Botón -->
+            <button id="btn-bulk-paste" class="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-all shadow-md hover:shadow-lg focus:ring-4 focus:ring-violet-500/20">
+                <i data-lucide="clipboard-paste" class="w-4 h-4"></i> Captura Rápida
             </button>
             
             <!-- Importar Botón e Input oculto -->
@@ -274,7 +327,8 @@
                                     <th class="px-4 py-3 font-medium">ID</th>
                                     <th class="px-4 py-3 font-medium">Estado</th>
                                     <th class="px-4 py-3 font-medium">Destino</th>
-                                    <th class="px-4 py-3 font-medium">Vehículo</th>
+                                    <th class="px-4 py-3 font-medium">Marcas</th>
+                                    <th class="px-4 py-3 font-medium">Número</th>
                                     <th class="px-4 py-3 font-medium text-red-600 dark:text-red-400">Faltante</th>
                                     <th class="px-4 py-3 font-medium">F. Siniestro</th>
                                     <th class="px-4 py-3 font-medium">Confronta</th>
@@ -360,6 +414,72 @@
             <div class="flex items-center justify-end gap-3">
                 <button id="btn-cancel-import" class="px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-sm">Cancelar</button>
                 <button id="btn-confirm-import" class="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-md hover:shadow-lg transition-all text-sm">Proceder</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Captura Rápida Modal -->
+    <div id="bulk-modal" class="fixed inset-0 bg-slate-900/50 dark:bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center transition-opacity">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-lg transform scale-95 transition-transform border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
+            
+            <!-- Header -->
+            <div class="px-6 pt-6 pb-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">
+                    <i data-lucide="clipboard-paste" class="w-5 h-5 text-violet-500"></i> Captura Rápida de Marcas y Números
+                </h3>
+                <p class="text-slate-500 dark:text-slate-400 text-sm">Pega tu lista de marcas y números. Cada línea es un registro. La marca y número deben estar separados por espacio o tabulador.</p>
+            </div>
+
+            <!-- Step 1: Input -->
+            <div id="bulk-step-input" class="px-6 py-4 flex flex-col gap-4 overflow-y-auto">
+                <div class="bg-slate-50 dark:bg-slate-900 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 p-3">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Formato esperado (una línea por registro):</p>
+                    <code class="text-xs text-violet-600 dark:text-violet-400 font-mono leading-relaxed">RGCX 507<br>NAHX 330108<br>TTGX 50291</code>
+                </div>
+                <textarea id="bulk-textarea" rows="8" class="input-field font-mono text-sm leading-relaxed resize-none" placeholder="Pega aquí tu lista...
+RGCX 507
+NAHX 330108"></textarea>
+                <p id="bulk-hint" class="text-xs text-slate-400 dark:text-slate-500">Los campos Estado, Destino, Remisión, etc. se tomarán del formulario principal.</p>
+            </div>
+
+            <!-- Step 2: Preview (hidden initially) -->
+            <div id="bulk-step-preview" class="px-6 py-4 hidden flex-col gap-4 overflow-y-auto">
+                <div id="bulk-preview-banner" class="flex items-center gap-2 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 rounded-lg px-4 py-3 border border-violet-200 dark:border-violet-800">
+                    <i data-lucide="list-checks" class="w-5 h-5 shrink-0"></i>
+                    <span class="text-sm font-semibold" id="bulk-preview-count">Se van a agregar X registros</span>
+                </div>
+                <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100/50 dark:bg-slate-800 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                                <th class="px-3 py-2 font-medium">#</th>
+                                <th class="px-3 py-2 font-medium">Marca</th>
+                                <th class="px-3 py-2 font-medium">Número</th>
+                                <th class="px-3 py-2 font-medium">Consec.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bulk-preview-body" class="bg-white/40 dark:bg-slate-800/40 divide-y divide-slate-100 dark:divide-slate-700/50 text-slate-700 dark:text-slate-300 text-sm">
+                        </tbody>
+                    </table>
+                </div>
+                <div id="bulk-warnings" class="hidden">
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
+                <button id="btn-bulk-back" class="px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-sm hidden">
+                    <i data-lucide="arrow-left" class="w-4 h-4 inline-block mr-1"></i>Volver
+                </button>
+                <div class="flex items-center gap-3 ml-auto">
+                    <button id="btn-bulk-cancel" class="px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-sm">Cancelar</button>
+                    <button id="btn-bulk-next" class="px-5 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white font-medium shadow-md hover:shadow-lg transition-all text-sm flex items-center gap-2">
+                        <i data-lucide="eye" class="w-4 h-4"></i> Pre-visualizar
+                    </button>
+                    <button id="btn-bulk-confirm" class="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-md hover:shadow-lg transition-all text-sm hidden flex items-center gap-2">
+                        <i data-lucide="check-circle" class="w-4 h-4"></i> Confirmar e Insertar
+                    </button>
+                </div>
             </div>
         </div>
     </div>
