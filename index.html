@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confrontas 2026 - Data Entry</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {}
+        }
+      }
+    </script>
+    <!-- SheetJS for Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9; /* slate-100 */
+        }
+        
+        .dark body {
+            background-color: #0f172a; /* slate-900 */
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+        }
+
+        .dark .glass-panel {
+            background: rgba(30, 41, 59, 0.95);
+            border: 1px solid rgba(71, 85, 105, 0.8);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .input-field {
+            width: 100%;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            padding: 0.625rem 0.875rem;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.01);
+            color: #1e293b;
+        }
+
+        .dark .input-field {
+            background-color: #0f172a;
+            border-color: #334155;
+            color: #f1f5f9;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #3b82f6;
+            background-color: #ffffff;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .dark .input-field:focus {
+            background-color: #1e293b;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        .section-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #64748b;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .dark .section-title {
+            color: #94a3b8;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #475569;
+        }
+        .dark ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        /* Editable cell styles */
+        .editable-cell {
+            cursor: pointer;
+            position: relative;
+            transition: background-color 0.15s ease;
+        }
+        .editable-cell:hover {
+            background-color: rgba(59, 130, 246, 0.06);
+        }
+        .dark .editable-cell:hover {
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+        .editable-cell .cell-display {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+        .editable-cell .cell-display .edit-hint {
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            color: #94a3b8;
+            flex-shrink: 0;
+        }
+        .editable-cell:hover .cell-display .edit-hint {
+            opacity: 1;
+        }
+        .dark .editable-cell .cell-display .edit-hint {
+            color: #64748b;
+        }
+        .cell-input {
+            width: 100%;
+            background-color: #ffffff;
+            border: 1.5px solid #3b82f6;
+            border-radius: 0.375rem;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+            color: #1e293b;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+            font-family: 'Inter', sans-serif;
+        }
+        .dark .cell-input {
+            background-color: #1e293b;
+            border-color: #60a5fa;
+            color: #f1f5f9;
+            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden text-slate-800 dark:text-slate-100 transition-colors duration-200">
+
+    <!-- Header -->
+    <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between shrink-0 glass-panel relative z-10 transition-colors duration-200">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/30">
+                <i data-lucide="file-spreadsheet" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Concentrado Confrontas 2026</h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Ingreso de datos y exportación rápida</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <!-- Limpiar Todo Botón -->
+            <button id="btn-clear" class="flex items-center gap-2 bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-400 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-sm focus:ring-4 focus:ring-rose-500/20">
+                <i data-lucide="trash-2" class="w-4 h-4"></i> Limpiar Todo
+            </button>
+
+            <!-- Captura Rápida Botón -->
+            <button id="btn-bulk-paste" class="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-all shadow-md hover:shadow-lg focus:ring-4 focus:ring-violet-500/20">
+                <i data-lucide="clipboard-paste" class="w-4 h-4"></i> Captura Rápida
+            </button>
+            
+            <!-- Importar Botón e Input oculto -->
+            <input type="file" id="file-import" accept=".xlsx, .xls" class="hidden">
+            <button id="btn-import" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-all shadow-md hover:shadow-lg focus:ring-4 focus:ring-indigo-500/20">
+                <i data-lucide="upload" class="w-4 h-4"></i> Importar Excel
+            </button>
+
+            <!-- Exportar Botón -->
+            <button id="btn-export" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-all shadow-md hover:shadow-lg focus:ring-4 focus:ring-emerald-500/20">
+                <i data-lucide="download" class="w-4 h-4"></i> Exportar a Excel
+            </button>
+
+            <div class="w-px h-8 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+            <!-- Dark Mode Toggle -->
+            <button id="theme-toggle" class="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors shadow-sm focus:ring-4 focus:ring-blue-500/20" title="Cambiar tema">
+                <i id="theme-icon-light" data-lucide="sun" class="w-5 h-5 hidden"></i>
+                <i id="theme-icon-dark" data-lucide="moon" class="w-5 h-5 hidden"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex overflow-hidden">
+        
+        <!-- Sidebar Form -->
+        <aside class="w-full md:w-[420px] bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 overflow-y-auto shrink-0 z-0 transition-colors duration-200">
+            <form id="data-form" class="px-6 py-6 space-y-8">
+                
+                <!-- Section 1 -->
+                <div>
+                    <h2 class="section-title"><i data-lucide="hash" class="w-4 h-4"></i> Identificación</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Consecutivo</label>
+                            <input type="number" id="consecutivo" name="consecutivo" class="input-field font-semibold text-blue-700 dark:text-blue-400" required placeholder="Ej: 9" min="0">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Estado</label>
+                            <input type="text" name="estado" class="input-field" required placeholder="Ej: Guanajuato">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Destino</label>
+                            <input type="text" name="destino" class="input-field" required placeholder="Ej: BTIR">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2 -->
+                <div>
+                    <h2 class="section-title"><i data-lucide="truck" class="w-4 h-4"></i> Carga y Remisión</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Marcas</label>
+                            <input type="text" name="marcas" class="input-field" required placeholder="Ej: RGCX">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Número</label>
+                            <input type="number" name="numero" min="0" class="input-field" required placeholder="Ej: 507">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Remisión</label>
+                            <input type="text" name="remision" class="input-field uppercase" required placeholder="Ej: GCPC-30R">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Item SAP</label>
+                            <input type="number" name="item" class="input-field" required placeholder="Ej: 348849">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Material SAP</label>
+                            <input type="text" name="material" class="input-field uppercase" required placeholder="Ej: FXE-0993">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3 -->
+                <div>
+                    <h2 class="section-title"><i data-lucide="clipboard-list" class="w-4 h-4"></i> Siniestro y Control</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="col-span-2">
+                            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Faltante (Tons)</label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 dark:text-slate-500 text-sm font-medium">kg</span>
+                                <input type="number" step="any" min="0" max="100000" name="faltante" class="input-field pl-9 !border-red-200 dark:!border-red-900/50 focus:!border-red-400 dark:focus:!border-red-500 bg-red-50 dark:bg-red-900/10 text-red-700 dark:text-red-400 font-semibold" required placeholder="0.00" value="0.00">
+                            </div>
+                        </div>
+                        <div class="col-span-2 border-t border-slate-100 dark:border-slate-700 my-2"></div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Fecha siniestro</label>
+                            <input type="date" name="fecha_siniestro" class="input-field" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Confronta (Fecha)</label>
+                            <input type="date" name="confronta_1" class="input-field" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Fecha de</label>
+                            <input type="text" name="fecha_de" class="input-field" required placeholder="Ej: 34654674">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Confronta (Doc)</label>
+                            <input type="text" name="confronta_2" class="input-field" required placeholder="Ej: 10040740">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit -->
+                <div class="pt-4">
+                    <button type="submit" class="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg text-sm font-bold transition-all shadow-md hover:shadow-lg focus:ring-4 focus:ring-blue-500/20">
+                        <i data-lucide="plus" class="w-5 h-5"></i> Agregar Registro
+                    </button>
+                    <p class="text-center text-xs text-slate-400 dark:text-slate-500 mt-3">El formulario se reseteará automáticamente para el siguiente ingreso.</p>
+                </div>
+            </form>
+        </aside>
+
+        <!-- Main Workspace -->
+        <section class="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-slate-900 relative overflow-hidden transition-colors duration-200">
+            
+            <div class="flex-1 overflow-auto p-6">
+                <!-- Data Table -->
+                <div class="glass-panel rounded-xl overflow-hidden shadow-sm flex flex-col mb-6">
+                    <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <h3 class="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2"><i data-lucide="list" class="w-4 h-4 text-blue-500"></i> Registros Ingresados</h3>
+                            <span class="text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-600">En memoria (sin exportar)</span>
+                        </div>
+                        
+                        <!-- Search Bar -->
+                        <div class="relative w-full sm:w-64">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 dark:text-slate-500">
+                                <i data-lucide="search" class="w-4 h-4"></i>
+                            </span>
+                            <input type="text" id="search-input" placeholder="Buscar en la tabla..." class="input-field pl-9 py-1.5 text-sm !bg-white dark:!bg-slate-900 w-full" autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100/50 dark:bg-slate-800 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                                    <th class="px-4 py-3 font-medium">ID</th>
+                                    <th class="px-4 py-3 font-medium">Estado</th>
+                                    <th class="px-4 py-3 font-medium">Destino</th>
+                                    <th class="px-4 py-3 font-medium">Marcas</th>
+                                    <th class="px-4 py-3 font-medium">Número</th>
+                                    <th class="px-4 py-3 font-medium text-red-600 dark:text-red-400">Faltante</th>
+                                    <th class="px-4 py-3 font-medium">F. Siniestro</th>
+                                    <th class="px-4 py-3 font-medium">Confronta</th>
+                                    <th class="px-4 py-3 font-medium">F. De</th>
+                                    <th class="px-4 py-3 font-medium">Conf. Doc</th>
+                                    <th class="px-4 py-3 font-medium">Remisión</th>
+                                    <th class="px-4 py-3 font-medium">Item</th>
+                                    <th class="px-4 py-3 font-medium">Material SAP</th>
+                                    <th class="px-4 py-3 font-medium text-right"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body" class="bg-white/40 dark:bg-slate-800/40 divide-y divide-slate-100 dark:divide-slate-700/50 text-slate-700 dark:text-slate-300">
+                                <!-- Dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Live Summary View -->
+                <div class="glass-panel rounded-xl overflow-hidden shadow-sm max-w-sm">
+                    <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 flex items-center gap-2">
+                        <h3 class="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2"><i data-lucide="calculator" class="w-4 h-4 text-emerald-500"></i> Fórmulas en Vivo</h3>
+                        <div class="group relative cursor-help">
+                            <i data-lucide="info" class="w-4 h-4 text-slate-400 dark:text-slate-500"></i>
+                            <div class="hidden group-hover:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 bg-slate-800 dark:bg-white text-white dark:text-slate-800 text-xs rounded-md py-1.5 px-2 text-center pointer-events-none">
+                                Equivale a SUMIF($K, O, $F) del Excel original
+                            </div>
+                        </div>
+                    </div>
+                    <table class="w-full text-left">
+                        <thead class="bg-slate-50/80 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                            <tr>
+                                <th class="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Remisión</th>
+                                <th class="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase text-right">Suma Faltante</th>
+                            </tr>
+                        </thead>
+                        <tbody id="summary-body" class="bg-white/40 dark:bg-slate-800/40">
+                            <!-- Dynamic summary -->
+                            <tr><td colspan="2" class="px-4 py-3 text-center text-xs text-slate-400 dark:text-slate-500">Sin datos</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </section>
+    </main>
+    
+    <!-- Limpiar Modal -->
+    <div id="clear-modal" class="fixed inset-0 bg-slate-900/50 dark:bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center transition-opacity">
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl w-full max-w-sm transform scale-95 transition-transform border border-slate-200 dark:border-slate-700">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-2"><i data-lucide="alert-triangle" class="w-5 h-5 text-rose-500"></i> ¿Vaciar todos los datos?</h3>
+            <p class="text-slate-600 dark:text-slate-400 text-sm mb-6">Esta acción borrará todos los registros actuales en memoria temporal y no se pueden recuperar. ¿Estás seguro de comenzar desde cero?</p>
+            <div class="flex items-center justify-end gap-3">
+                <button id="btn-cancel-clear" class="px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-sm">Cancelar</button>
+                <button id="btn-confirm-clear" class="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium shadow-md hover:shadow-lg transition-all text-sm">Sí, borrar todo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Importar Modal -->
+    <div id="import-modal" class="fixed inset-0 bg-slate-900/50 dark:bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center transition-opacity">
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl w-full max-w-md transform scale-95 transition-transform border border-slate-200 dark:border-slate-700">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-2"><i data-lucide="file-up" class="w-5 h-5 text-indigo-500"></i> Importación Lista</h3>
+            <p class="text-slate-600 dark:text-slate-400 text-sm mb-4">Se detectaron registros válidos en el archivo Excel. ¿Cómo deseas proceder?</p>
+            
+            <div class="grid grid-cols-1 gap-3 mb-6">
+                <label class="cursor-pointer flex items-start gap-3 p-3 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors transition-colors">
+                    <input type="radio" name="import_action" value="append" class="mt-1" checked>
+                    <div>
+                        <span class="block text-sm font-semibold text-slate-800 dark:text-slate-200">Añadir al final (Append)</span>
+                        <span class="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">Los datos importados se agregarán junto a los que ya tienes en memoria.</span>
+                    </div>
+                </label>
+                <label class="cursor-pointer flex items-start gap-3 p-3 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/10 transition-colors">
+                    <input type="radio" name="import_action" value="overwrite" class="mt-1">
+                    <div>
+                        <span class="block text-sm font-semibold text-slate-800 dark:text-slate-200 text-rose-700 dark:text-rose-400">Sobrescribir todo</span>
+                        <span class="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">Se eliminarán tus registros actuales y solo se mantendrá el contenido del Excel.</span>
+                    </div>
+                </label>
+            </div>
+
+            <div class="flex items-center justify-end gap-3">
+                <button id="btn-cancel-import" class="px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-sm">Cancelar</button>
+                <button id="btn-confirm-import" class="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-md hover:shadow-lg transition-all text-sm">Proceder</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Captura Rápida Modal -->
+    <div id="bulk-modal" class="fixed inset-0 bg-slate-900/50 dark:bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center transition-opacity">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-lg transform scale-95 transition-transform border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
+            
+            <!-- Header -->
+            <div class="px-6 pt-6 pb-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">
+                    <i data-lucide="clipboard-paste" class="w-5 h-5 text-violet-500"></i> Captura Rápida de Marcas y Números
+                </h3>
+                <p class="text-slate-500 dark:text-slate-400 text-sm">Pega tu lista de marcas y números. Cada línea es un registro. La marca y número deben estar separados por espacio o tabulador.</p>
+            </div>
+
+            <!-- Step 1: Input -->
+            <div id="bulk-step-input" class="px-6 py-4 flex flex-col gap-4 overflow-y-auto">
+                <div class="bg-slate-50 dark:bg-slate-900 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 p-3">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Formato esperado (una línea por registro):</p>
+                    <code class="text-xs text-violet-600 dark:text-violet-400 font-mono leading-relaxed">RGCX 507<br>NAHX 330108<br>TTGX 50291</code>
+                </div>
+                <textarea id="bulk-textarea" rows="8" class="input-field font-mono text-sm leading-relaxed resize-none" placeholder="Pega aquí tu lista...
+RGCX 507
+NAHX 330108"></textarea>
+                <p id="bulk-hint" class="text-xs text-slate-400 dark:text-slate-500">Los campos Estado, Destino, Remisión, etc. se tomarán del formulario principal.</p>
+            </div>
+
+            <!-- Step 2: Preview (hidden initially) -->
+            <div id="bulk-step-preview" class="px-6 py-4 hidden flex-col gap-4 overflow-y-auto">
+                <div id="bulk-preview-banner" class="flex items-center gap-2 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 rounded-lg px-4 py-3 border border-violet-200 dark:border-violet-800">
+                    <i data-lucide="list-checks" class="w-5 h-5 shrink-0"></i>
+                    <span class="text-sm font-semibold" id="bulk-preview-count">Se van a agregar X registros</span>
+                </div>
+                <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100/50 dark:bg-slate-800 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                                <th class="px-3 py-2 font-medium">#</th>
+                                <th class="px-3 py-2 font-medium">Marca</th>
+                                <th class="px-3 py-2 font-medium">Número</th>
+                                <th class="px-3 py-2 font-medium">Consec.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bulk-preview-body" class="bg-white/40 dark:bg-slate-800/40 divide-y divide-slate-100 dark:divide-slate-700/50 text-slate-700 dark:text-slate-300 text-sm">
+                        </tbody>
+                    </table>
+                </div>
+                <div id="bulk-warnings" class="hidden">
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
+                <button id="btn-bulk-back" class="px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-sm hidden">
+                    <i data-lucide="arrow-left" class="w-4 h-4 inline-block mr-1"></i>Volver
+                </button>
+                <div class="flex items-center gap-3 ml-auto">
+                    <button id="btn-bulk-cancel" class="px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-sm">Cancelar</button>
+                    <button id="btn-bulk-next" class="px-5 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white font-medium shadow-md hover:shadow-lg transition-all text-sm flex items-center gap-2">
+                        <i data-lucide="eye" class="w-4 h-4"></i> Pre-visualizar
+                    </button>
+                    <button id="btn-bulk-confirm" class="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-md hover:shadow-lg transition-all text-sm hidden flex items-center gap-2">
+                        <i data-lucide="check-circle" class="w-4 h-4"></i> Confirmar e Insertar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
